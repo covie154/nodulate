@@ -48,6 +48,7 @@ Fast, accurate bounding box drawing with rock-solid auto-save — annotators sho
 
 ## Constraints
 
+- **Backend**: Django (Python) — explicitly confirmed by user, not just inherited from the prior draft doc. Pairs naturally with pydicom for DICOM handling.
 - **Data format**: Source images are DICOM (.dcm), single-frame — reading requires pydicom, not a plain image library. Display only; no PACS server, no image manipulation tools.
 - **Deployment**: Must be reachable over the internet by a small, known team — real authentication is required, not a local-only trust model.
 - **Privacy**: Dataset is already de-identified, but the app should still avoid unnecessarily logging or exposing raw DICOM metadata, out of general caution with medical imaging data.
@@ -57,6 +58,7 @@ Fast, accurate bounding box drawing with rock-solid auto-save — annotators sho
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Backend: Django | Explicitly confirmed by user; pairs naturally with pydicom | ✓ Confirmed |
 | pydicom + lightweight display, no PACS | No query/retrieve needs; fixed local dataset; simplest path to "just show the pixels" | — Pending |
 | Export format: COCO JSON only (not YOLO) for v1 | User's explicit preference; richer metadata than YOLO txt | — Pending |
 | Flat sequential image list, not grouped by nodule | Simpler UX; grouping by nodule not needed despite ~2 images/nodule | — Pending |
