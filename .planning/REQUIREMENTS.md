@@ -7,37 +7,37 @@
 
 ### Authentication
 
-- [ ] **AUTH-01**: User can log in with a username/password
-- [ ] **AUTH-02**: User session persists across browser refresh during an annotation session
-- [ ] **AUTH-03**: Accounts are provisioned manually for the 2-3 known team members (no self-signup)
+- [x] **AUTH-01**: User can log in with a username/password
+- [x] **AUTH-02**: User session persists across browser refresh during an annotation session
+- [x] **AUTH-03**: Accounts are provisioned manually for the 2-3 known team members (no self-signup)
 
 ### Image Display
 
-- [ ] **IMG-01**: User can view a DICOM ultrasound image at original resolution, decoded via pydicom
-- [ ] **IMG-02**: Images load from a fixed local dataset (~1400-1600 files), no upload UI needed
-- [ ] **IMG-03**: Image load time stays fast enough that browsing feels immediate (no windowing/measurement tools to slow things down)
+- [x] **IMG-01**: User can view a DICOM ultrasound image at original resolution, decoded via pydicom
+- [x] **IMG-02**: Images load from a fixed local dataset (~1400-1600 files), no upload UI needed
+- [x] **IMG-03**: Image load time stays fast enough that browsing feels immediate (no windowing/measurement tools to slow things down)
 
 ### Bounding Box Annotation
 
-- [ ] **BBOX-01**: User can draw a bounding box around the nodule via click-and-drag
-- [ ] **BBOX-02**: User can resize an existing bounding box by dragging its corners/edges
-- [ ] **BBOX-03**: User can delete a bounding box
-- [ ] **BBOX-04**: Exactly one bounding box per image (no multi-box UI)
-- [ ] **BBOX-05**: Annotations auto-save as the user draws/modifies, debounced to avoid excessive writes
-- [ ] **BBOX-06**: Visual "Saved" confirmation appears after auto-save completes
+- [x] **BBOX-01**: User can draw a bounding box around the nodule via click-and-drag
+- [x] **BBOX-02**: User can resize an existing bounding box by dragging its corners/edges
+- [x] **BBOX-03**: User can delete a bounding box
+- [x] **BBOX-04**: Exactly one bounding box per image (no multi-box UI)
+- [x] **BBOX-05**: Annotations auto-save as the user draws/modifies, debounced to avoid excessive writes
+- [x] **BBOX-06**: Visual "Saved" confirmation appears after auto-save completes
 
 ### Navigation & Progress
 
-- [ ] **NAV-01**: User can move to the next image via a Next button (already auto-saved)
-- [ ] **NAV-02**: User can move to the previous image via a Previous button to review/edit
-- [ ] **NAV-03**: Images are presented as a flat, sequential list (not grouped by nodule)
-- [ ] **NAV-04**: Progress bar shows completion percentage and count (e.g. "45% — 23 of 50 images")
-- [ ] **NAV-05**: A completion message appears when the end of the image set is reached
+- [x] **NAV-01**: User can move to the next image via a Next button (already auto-saved)
+- [x] **NAV-02**: User can move to the previous image via a Previous button to review/edit
+- [x] **NAV-03**: Images are presented as a flat, sequential list (not grouped by nodule)
+- [x] **NAV-04**: Progress bar shows completion percentage and count (e.g. "45% — 23 of 50 images")
+- [x] **NAV-05**: A completion message appears when the end of the image set is reached
 
 ### Data Export
 
-- [ ] **EXP-01**: User can export all annotations as a single COCO JSON file
-- [ ] **EXP-02**: Export includes image filename, bounding box coordinates, timestamp, and annotator identity
+- [x] **EXP-01**: User can export all annotations as a single COCO JSON file
+- [x] **EXP-02**: Export includes image filename, bounding box coordinates, timestamp, and annotator identity
 
 ## v2 Requirements
 
@@ -76,27 +76,28 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Pending |
-| AUTH-02 | Phase 1 | Pending |
-| AUTH-03 | Phase 1 | Pending |
-| IMG-01 | Phase 1 | Pending |
-| IMG-02 | Phase 1 | Pending |
-| IMG-03 | Phase 1 | Pending |
-| BBOX-01 | Phase 2 | Pending |
-| BBOX-02 | Phase 2 | Pending |
-| BBOX-03 | Phase 2 | Pending |
-| BBOX-04 | Phase 2 | Pending |
-| BBOX-05 | Phase 2 | Pending |
-| BBOX-06 | Phase 2 | Pending |
-| NAV-01 | Phase 3 | Pending |
-| NAV-02 | Phase 3 | Pending |
-| NAV-03 | Phase 3 | Pending |
-| NAV-04 | Phase 3 | Pending |
-| NAV-05 | Phase 3 | Pending |
-| EXP-01 | Phase 4 | Pending |
-| EXP-02 | Phase 4 | Pending |
+| AUTH-01 | Phase 1 | Complete |
+| AUTH-02 | Phase 1 | Complete |
+| AUTH-03 | Phase 1 | Complete |
+| IMG-01 | Phase 1 | Complete |
+| IMG-02 | Phase 1 | Complete |
+| IMG-03 | Phase 1 | Complete |
+| BBOX-01 | Phase 2 | Complete |
+| BBOX-02 | Phase 2 | Complete |
+| BBOX-03 | Phase 2 | Complete |
+| BBOX-04 | Phase 2 | Complete |
+| BBOX-05 | Phase 2 | Complete |
+| BBOX-06 | Phase 2 | Complete |
+| NAV-01 | Phase 3 | Complete |
+| NAV-02 | Phase 3 | Complete |
+| NAV-03 | Phase 3 | Complete |
+| NAV-04 | Phase 3 | Complete |
+| NAV-05 | Phase 3 | Complete |
+| EXP-01 | Phase 4 | Complete |
+| EXP-02 | Phase 4 | Complete |
 
 **Coverage:**
+
 - v1 requirements: 19 total
 - Mapped to phases: 19 (Phase 1: 6, Phase 2: 6, Phase 3: 5, Phase 4: 2)
 - Unmapped: 0 ✓

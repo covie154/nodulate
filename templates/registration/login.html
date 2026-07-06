@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}sign in - nodulate{% endblock %}
+{% block body %}
+<main class="login-shell">
+  <section class="login-card" aria-labelledby="login-title">
+    <div class="brand-row">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">nodulate</span>
+    </div>
+    <h1 id="login-title">Sign in to annotate</h1>
+    <p class="login-copy">Your session stays active while you label. Annotations auto-save as you work.</p>
+    {% if form.errors %}
+      <div class="form-error">Username or password was not recognized.</div>
+    {% endif %}
+    <form method="post" class="login-form" novalidate>
+      {% csrf_token %}
+      <label>
+        <span>Username</span>
+        <input name="username" type="text" autocomplete="username" autofocus required>
+      </label>
+      <label>
+        <span>Password</span>
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <label class="remember-row">
+        <input type="checkbox" checked disabled>
+        <span>Keep me signed in</span>
+      </label>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button type="submit" class="primary-button">Enter workspace</button>
+    </form>
+    <div class="login-meta">session · Django · pydicom</div>
+  </section>
+</main>
+{% endblock %}

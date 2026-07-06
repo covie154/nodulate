@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ image.filename }} - nodulate{% endblock %}
+{% block body %}
+<header class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">nodulate</span>
+    <span class="batch-label">thyroid dataset</span>
+  </div>
+  <div class="topbar-actions">
+    <a class="ghost-button" href="{{ export_url }}">Export COCO</a>
+    <span class="user-label">{{ request.user.username }}</span>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button class="ghost-button" type="submit">Sign out</button>
+    </form>
+  </div>
+</header>
+
+<main class="workspace">
+  <section class="image-column">
+    <div class="workspace-meta">
+      <div class="mono-line">
+        {{ image.filename }} <span>· {{ image.width|default:"?" }}×{{ image.height|default:"?" }} · original resolution</span>
+      </div>
+      <div class="save-state" id="save-state" aria-live="polite"></div>
+    </div>
+
+    <div class="stage-wrap">
+      <div
+        id="annotation-stage"
+        class="annotation-stage"
+        data-annotation-url="{{ annotation_url }}"
+        data-initial='{{ annotation_json|escape }}'
+      >
+        <img id="dicom-image" src="{{ image_url }}" alt="DICOM ultrasound image {{ image.filename }}" draggable="false">
+        <div id="box-layer" class="box-layer"></div>
+        <div id="empty-hint" class="empty-hint">Click and drag over a lesion to draw a box</div>
+      </div>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-row">
+        <span>Progress</span>
+        <span><strong>{{ progress_percentage }}%</strong> - {{ completed_images }} of {{ total_images }} images</span>
+      </div>
+      <div class="progress-stack">
+        <div class="progress-track" aria-hidden="true">
+          {% for item in image_progress_items %}
+            <span class="progress-segment{% if item.is_completed %} completed{% endif %}"></span>
+          {% endfor %}
+        </div>
+        <nav class="progress-pips" aria-label="Image progress">
+          {% for item in image_progress_items %}
+            <a
+              class="progress-pip {{ item.status }}"
+              href="{{ item.url }}"
+              aria-label="Image {{ item.label }}: {% if item.is_current %}current{% elif item.is_completed %}completed{% else %}not labeled{% endif %}"
+              {% if item.is_current %}aria-current="step"{% endif %}
+              title="Image {{ item.label }}: {% if item.is_current %}current{% elif item.is_completed %}completed{% else %}not labeled{% endif %}"
+            >
+              <span class="progress-pip-line" aria-hidden="true"></span>
+              {% if item.is_current %}<span class="progress-pip-flag" aria-hidden="true"></span>{% endif %}
+            </a>
+          {% endfor %}
+        </nav>
+      </div>
+    </div>
+
+    {% if is_complete %}
+      <section class="completion-panel">
+        <h2>Dataset complete</h2>
+        <p>All {{ total_images }} images have saved bounding boxes. You can review previous images or export COCO JSON.</p>
+      </section>
+    {% endif %}
+
+    <div class="actionbar">
+      <button id="delete-box" class="danger-button" type="button">Delete selected</button>
+      <div class="spacer"></div>
+      <a class="nav-button{% if is_first %} disabled{% endif %}" data-nav-link href="{{ previous_url }}" {% if is_first %}aria-disabled="true"{% endif %}>Prev</a>
+      <a class="primary-button{% if is_last %} disabled{% endif %}" data-nav-link href="{{ next_url }}" {% if is_last %}aria-disabled="true"{% endif %}>Next</a>
+    </div>
+  </section>
+
+  <aside class="side-panel">
+    <section>
+      <h2>Annotation</h2>
+      <div id="annotation-summary" class="annotation-summary">No box on this image yet.</div>
+    </section>
+    <section>
+      <h2>Shortcuts</h2>
+      <ul class="shortcut-list">
+        <li><span>Delete selected box</span><kbd>Del</kbd></li>
+        <li><span>Force save</span><kbd>Ctrl S</kbd></li>
+        <li><span>Draw / move / resize</span><kbd>Drag</kbd></li>
+      </ul>
+    </section>
+  </aside>
+</main>
+<script src="{% static 'labeler/annotation.js' %}"></script>
+{% endblock %}
+
