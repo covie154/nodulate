@@ -1,36 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: complete
-stopped_at: All four GSD phases completed
-last_updated: "2026-07-06T15:24:04.183Z"
-last_activity: 2026-07-06
+milestone: v2.0
+milestone_name: Draft Model Annotations
+status: planning
+stopped_at: Started V2.0 milestone for offline model draft import and review
+last_updated: "2026-07-09T00:00:00.000Z"
+last_activity: 2026-07-09
 progress:
-  total_phases: 4
+  total_phases: 7
   completed_phases: 4
-  total_plans: 4
+  total_plans: 7
   completed_plans: 4
-  percent: 100
+  percent: 57
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-06)
+See: .planning/PROJECT.md (updated 2026-07-09)
 
-**Core value:** Fast, accurate bounding box drawing with rock-solid auto-save — annotators should never lose work, and drawing/adjusting a box should feel immediate.
-**Current focus:** Milestone complete — all four MVP phases implemented and verified
+**Core value:** Fast, accurate bounding box drawing with rock-solid auto-save; draft model boxes should reduce effort without blocking immediate human correction.
+**Current focus:** v2.0 Draft Model Annotations
 
 ## Current Position
 
-Phase: 4 of 4 (Export to COCO JSON)
-Plan: 04-01 complete
-Status: Complete
-Last activity: 2026-07-07 - Completed quick task: initial README
+Phase: 5 of 7 (Roles & DICOM Matching Foundation)
+Plan: 05-01 pending
+Status: Planning V2.0 implementation
+Last activity: 2026-07-09 - Completed quick task: draft box inline actions
 
-Progress: [██████████] 100%
+Progress: [######----] 57%
 
 ## Performance Metrics
 
@@ -45,14 +45,17 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 | 1 | - | - |
-| 3 | 1 | - | - |
 | 2 | 1 | - | - |
+| 3 | 1 | - | - |
 | 4 | 1 | - | - |
+| 5 | 0 | - | - |
+| 6 | 0 | - | - |
+| 7 | 0 | - | - |
 
 **Recent Trend:**
 
-- Last 5 plans: none yet
-- Trend: N/A
+- Last 5 plans: 04-01 complete, V2.0 planning started
+- Trend: V1 complete; V2.0 pending
 
 *Updated after each plan completion*
 
@@ -60,33 +63,36 @@ Progress: [██████████] 100%
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecting current work:
 
-- Roadmap: pydicom + no PACS, COCO JSON only export, flat sequential image list, exactly one bbox per image, real auth required (all from PROJECT.md Key Decisions).
-- Roadmap: 4 vertical-slice phases chosen (Login/View → Annotate → Navigate/Progress → Export) rather than horizontal layers, per MVP mode.
+- V2.0 keeps EC2 lean by importing offline RF-DETR predictions instead of running model inference in the web app.
+- CSV columns `sx`, `sy`, `ex`, `ey` are interpreted as pixel-space corners: `sx`,`sy` top-left and `ex`,`ey` bottom-right.
+- Use SOP Instance UID as the unique DICOM matching key; accession number is retained only when present.
+- `drafter` is imported-box provenance, not a human login role.
+- Human roles are `user` and future `tiebreaker`; admin status remains Django staff/superuser.
 
 ### Pending Todos
 
-None yet.
+- Implement Phase 5 schema: profile roles plus SOP UID inventory matching fields.
+- Implement Phase 6 admin CSV upload and draft upload retention.
+- Implement Phase 7 draft display, progress coloring, accept/edit/delete override behavior.
 
 ### Blockers/Concerns
 
-None yet.
+None currently.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
-
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| v2 requirements | AI-assisted draft bounding boxes (AI-01..03) | Deferred | Requirements definition |
-| v2 requirements | Multi-expert review workflow (REV-01..05) | Deferred | Requirements definition |
+| future requirements | Full multi-expert consensus workflow | Deferred | v2.0 scoping |
+| future requirements | IOU/similarity metric reporting between model uploads and human boxes | Deferred | v2.0 scoping |
+| future requirements | Online RF-DETR inference in Django | Out of scope | v2.0 scoping |
 
 ## Session Continuity
 
-Last session: 2026-07-06
-Stopped at: All four GSD phases completed
+Last session: 2026-07-09
+Stopped at: V2.0 milestone planning and implementation start
 Resume file: .planning/STATE.md
 
 ## Quick Tasks Completed
@@ -98,4 +104,4 @@ Resume file: .planning/STATE.md
 | 2026-07-07 | Segmented progress lines | Complete |
 | 2026-07-07 | Flat progress segments | Complete |
 | 2026-07-07 | Initial README | Complete |
-
+| 2026-07-09 | Draft box inline actions | Complete |

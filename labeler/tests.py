@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 from pathlib import Path
@@ -10,7 +11,8 @@ from django.urls import reverse
 
 from .dicom import discover_dataset_files, first_unlabeled_or_first, sync_image_assets
 from .export import build_coco_export
-from .models import Annotation, ImageAsset
+from .drafts import import_draft_csv, latest_visible_draft_for, latest_visible_drafts
+from .models import Annotation, DraftAnnotation, DraftUpload, ImageAsset, UserProfile
 
 
 User = get_user_model()
@@ -183,3 +185,135 @@ class ExportTests(TestCase):
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertIn("nodulate-coco-", response["Content-Disposition"])
         self.assertEqual(json.loads(response.content)["annotations"][0]["annotator"], "annotator")
+
+
+class RoleProfileTests(TestCase):
+    def test_user_profile_defaults_to_user_role(self):
+        user = User.objects.create_user(username="reader", password="secret12345")
+
+        self.assertEqual(user.profile.role, UserProfile.Role.USER)
+        self.assertFalse(user.is_staff)
+
+
+class DraftImportTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username="admin", password="secret12345", is_staff=True)
+        self.image = ImageAsset.objects.create(
+            relative_path="4/4_8.dcm",
+            filename="4_8.dcm",
+            nodule_id="4",
+            sequence_index=1,
+            accession_no="ACC-1",
+            sop_instance_uid="SOP-1",
+            width=100,
+            height=200,
+        )
+
+    def test_import_draft_csv_matches_sop_uid_and_normalizes_corner_bbox(self):
+        upload = DraftUpload.objects.create(filename="predictions.csv", uploaded_by=self.admin)
+        payload = "sopInstanceUid,sx,sy,ex,ey\nSOP-1,10,20,40,60\n"
+
+        summary = import_draft_csv(upload, io.StringIO(payload))
+
+        self.assertEqual(summary.imported, 1)
+        self.assertEqual(summary.unmatched, 0)
+        self.assertEqual(summary.errors, 0)
+        draft = DraftAnnotation.objects.get(upload=upload, image=self.image)
+        self.assertAlmostEqual(draft.x, 0.1)
+        self.assertAlmostEqual(draft.y, 0.1)
+        self.assertAlmostEqual(draft.width, 0.3)
+        self.assertAlmostEqual(draft.height, 0.2)
+
+    def test_import_draft_csv_counts_unmatched_and_invalid_rows(self):
+        upload = DraftUpload.objects.create(filename="predictions.csv", uploaded_by=self.admin)
+        payload = "sopInstanceUid,sx,sy,ex,ey\nSOP-X,10,20,40,60\nSOP-1,95,20,130,60\n"
+
+        summary = import_draft_csv(upload, io.StringIO(payload))
+        upload.refresh_from_db()
+
+        self.assertEqual(summary.imported, 0)
+        self.assertEqual(upload.unmatched_count, 1)
+        self.assertEqual(upload.error_count, 1)
+        self.assertFalse(DraftAnnotation.objects.exists())
+
+    def test_latest_visible_drafts_use_latest_upload_and_hide_human_annotations(self):
+        old_upload = DraftUpload.objects.create(filename="old.csv", uploaded_by=self.admin)
+        old_draft = DraftAnnotation.objects.create(upload=old_upload, image=self.image, accession_no="ACC-1", sop_instance_uid="SOP-1", x=0.1, y=0.1, width=0.2, height=0.2)
+        new_upload = DraftUpload.objects.create(filename="new.csv", uploaded_by=self.admin)
+        new_draft = DraftAnnotation.objects.create(upload=new_upload, image=self.image, accession_no="ACC-1", sop_instance_uid="SOP-1", x=0.2, y=0.2, width=0.2, height=0.2)
+
+        self.assertEqual(list(latest_visible_drafts()), [new_draft])
+        self.assertEqual(latest_visible_draft_for(self.image), new_draft)
+
+        Annotation.objects.create(image=self.image, annotator=self.admin, x=0.3, y=0.3, width=0.2, height=0.2)
+
+        self.assertEqual(list(latest_visible_drafts()), [])
+        self.assertIsNone(latest_visible_draft_for(self.image))
+        self.assertNotIn(old_draft, latest_visible_drafts())
+
+
+class DraftWorkspaceTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="annotator", password="secret12345")
+        self.image = ImageAsset.objects.create(
+            relative_path="4/4_8.dcm",
+            filename="4_8.dcm",
+            nodule_id="4",
+            sequence_index=1,
+            accession_no="ACC-1",
+            sop_instance_uid="SOP-1",
+            width=100,
+            height=100,
+        )
+        self.upload = DraftUpload.objects.create(filename="drafts.csv", uploaded_by=self.user)
+        self.draft = DraftAnnotation.objects.create(upload=self.upload, image=self.image, accession_no="ACC-1", sop_instance_uid="SOP-1", x=0.1, y=0.2, width=0.3, height=0.4)
+
+    def test_workspace_uses_draft_when_no_human_annotation_exists(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("workspace_image", args=[self.image.sequence_index]))
+
+        self.assertContains(response, '&quot;source&quot;: &quot;draft&quot;')
+        self.assertContains(response, 'class="progress-pip current draft"', html=False)
+        self.assertContains(response, 'class="progress-segment draft"', html=False)
+        self.assertContains(response, "0 of 1 images")
+
+    def test_get_annotation_returns_visible_draft(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("annotation_detail", args=[self.image.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["annotation"]["source"], "draft")
+
+    def test_post_annotation_accepts_or_overrides_draft_as_human_annotation(self):
+        self.client.force_login(self.user)
+        self.user.profile.role = UserProfile.Role.TIEBREAKER
+        self.user.profile.save()
+
+        response = self.client.post(
+            reverse("annotation_detail", args=[self.image.pk]),
+            data=json.dumps({"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        annotation = Annotation.objects.get(image=self.image)
+        self.assertEqual(annotation.annotator, self.user)
+        self.assertEqual(annotation.role, UserProfile.Role.TIEBREAKER)
+        self.assertEqual(response.json()["annotation"]["source"], "human")
+        self.assertIsNone(latest_visible_draft_for(self.image))
+
+    def test_delete_visible_draft_suppresses_it_without_creating_human_annotation(self):
+        self.client.force_login(self.user)
+
+        response = self.client.delete(reverse("annotation_detail", args=[self.image.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "draft_deleted")
+        self.assertFalse(Annotation.objects.exists())
+        self.draft.refresh_from_db()
+        self.assertIsNotNone(self.draft.dismissed_at)
+        self.assertIsNone(latest_visible_draft_for(self.image))
+
+

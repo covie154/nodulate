@@ -22,7 +22,7 @@
   <section class="image-column">
     <div class="workspace-meta">
       <div class="mono-line">
-        {{ image.filename }} <span>· {{ image.width|default:"?" }}×{{ image.height|default:"?" }} · original resolution</span>
+        {{ image.filename }} <span>- {{ image.width|default:"?" }}x{{ image.height|default:"?" }} - original resolution</span>
       </div>
       <div class="save-state" id="save-state" aria-live="polite"></div>
     </div>
@@ -48,17 +48,17 @@
       <div class="progress-stack">
         <div class="progress-track" aria-hidden="true">
           {% for item in image_progress_items %}
-            <span class="progress-segment{% if item.is_completed %} completed{% endif %}"></span>
+            <span class="progress-segment{% if item.is_completed %} completed{% elif item.is_draft %} draft{% endif %}"></span>
           {% endfor %}
         </div>
         <nav class="progress-pips" aria-label="Image progress">
           {% for item in image_progress_items %}
             <a
-              class="progress-pip {{ item.status }}"
+              class="progress-pip {{ item.status }}{% if item.is_draft %} draft{% endif %}"
               href="{{ item.url }}"
-              aria-label="Image {{ item.label }}: {% if item.is_current %}current{% elif item.is_completed %}completed{% else %}not labeled{% endif %}"
+              aria-label="Image {{ item.label }}: {% if item.is_current %}current{% elif item.is_completed %}completed{% elif item.is_draft %}draft available{% else %}not labeled{% endif %}"
               {% if item.is_current %}aria-current="step"{% endif %}
-              title="Image {{ item.label }}: {% if item.is_current %}current{% elif item.is_completed %}completed{% else %}not labeled{% endif %}"
+              title="Image {{ item.label }}: {% if item.is_current %}current{% elif item.is_completed %}completed{% elif item.is_draft %}draft available{% else %}not labeled{% endif %}"
             >
               <span class="progress-pip-line" aria-hidden="true"></span>
               {% if item.is_current %}<span class="progress-pip-flag" aria-hidden="true"></span>{% endif %}
@@ -76,7 +76,6 @@
     {% endif %}
 
     <div class="actionbar">
-      <button id="delete-box" class="danger-button" type="button">Delete selected</button>
       <div class="spacer"></div>
       <a class="nav-button{% if is_first %} disabled{% endif %}" data-nav-link href="{{ previous_url }}" {% if is_first %}aria-disabled="true"{% endif %}>Prev</a>
       <a class="primary-button{% if is_last %} disabled{% endif %}" data-nav-link href="{{ next_url }}" {% if is_last %}aria-disabled="true"{% endif %}>Next</a>
@@ -85,7 +84,13 @@
 
   <aside class="side-panel">
     <section>
-      <h2>Annotation</h2>
+      <div class="panel-heading-row">
+        <h2>Annotation</h2>
+        <div class="annotation-tools">
+          <button id="accept-draft" class="icon-button accept" type="button" title="Accept draft" aria-label="Accept draft">&#10003;</button>
+          <button id="delete-box" class="icon-button danger" type="button" title="Delete box" aria-label="Delete box">&times;</button>
+        </div>
+      </div>
       <div id="annotation-summary" class="annotation-summary">No box on this image yet.</div>
     </section>
     <section>
@@ -100,4 +105,6 @@
 </main>
 <script src="{% static 'labeler/annotation.js' %}"></script>
 {% endblock %}
+
+
 

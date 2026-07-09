@@ -20,11 +20,25 @@ class DatasetFile:
     filename: str
     nodule_id: str
     sort_key: tuple[int, str]
+    accession_no: str = ""
+    sop_instance_uid: str = ""
 
 
 def _numeric_prefix(value: str) -> int:
     match = re.search(r"\d+", value)
     return int(match.group(0)) if match else 0
+
+
+def _read_matching_tags(path: Path) -> tuple[str, str]:
+    try:
+        dataset = pydicom.dcmread(
+            str(path),
+            stop_before_pixels=True,
+            specific_tags=["AccessionNumber", "SOPInstanceUID"],
+        )
+    except Exception:
+        return "", ""
+    return str(getattr(dataset, "AccessionNumber", "") or ""), str(getattr(dataset, "SOPInstanceUID", "") or "")
 
 
 def discover_dataset_files() -> list[DatasetFile]:
@@ -36,12 +50,15 @@ def discover_dataset_files() -> list[DatasetFile]:
     for path in root.rglob("*.dcm"):
         relative = path.relative_to(root).as_posix()
         nodule_id = path.parent.name
+        accession_no, sop_instance_uid = _read_matching_tags(path)
         files.append(
             DatasetFile(
                 relative_path=relative,
                 filename=path.name,
                 nodule_id=nodule_id,
                 sort_key=(_numeric_prefix(nodule_id), path.name.lower()),
+                accession_no=accession_no,
+                sop_instance_uid=sop_instance_uid,
             )
         )
     return sorted(files, key=lambda item: item.sort_key)
@@ -55,6 +72,8 @@ def sync_image_assets() -> list[ImageAsset]:
             defaults={
                 "filename": item.filename,
                 "nodule_id": item.nodule_id,
+                "accession_no": item.accession_no,
+                "sop_instance_uid": item.sop_instance_uid,
                 "sequence_index": index,
             },
         )
@@ -74,6 +93,20 @@ def first_unlabeled_or_first() -> ImageAsset | None:
     if unlabeled:
         return unlabeled
     return ImageAsset.objects.order_by("sequence_index").first()
+
+
+def ensure_image_dimensions(asset: ImageAsset) -> ImageAsset:
+    if asset.width and asset.height:
+        return asset
+    try:
+        dataset = pydicom.dcmread(str(asset.dicom_path), stop_before_pixels=True, specific_tags=["Rows", "Columns"])
+        asset.width = int(getattr(dataset, "Columns", 0) or 0)
+        asset.height = int(getattr(dataset, "Rows", 0) or 0)
+        if asset.width and asset.height:
+            asset.save(update_fields=["width", "height", "updated_at"])
+    except Exception:
+        pass
+    return asset
 
 
 def _cache_path(asset: ImageAsset) -> Path:
@@ -107,7 +140,9 @@ def dicom_png_bytes(asset: ImageAsset) -> bytes:
 
     asset.width = int(image.width)
     asset.height = int(image.height)
-    asset.save(update_fields=["width", "height", "updated_at"])
+    asset.accession_no = str(getattr(dataset, "AccessionNumber", "") or asset.accession_no or "")
+    asset.sop_instance_uid = str(getattr(dataset, "SOPInstanceUID", "") or asset.sop_instance_uid or "")
+    asset.save(update_fields=["width", "height", "accession_no", "sop_instance_uid", "updated_at"])
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     output = io.BytesIO()

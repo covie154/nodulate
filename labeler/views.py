@@ -10,8 +10,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .dicom import dicom_png_bytes, ensure_inventory, first_unlabeled_or_first, sync_image_assets
+from .drafts import latest_visible_draft_for, latest_visible_drafts
 from .export import build_coco_export
-from .models import Annotation, ImageAsset
+from .models import Annotation, ImageAsset, UserProfile
+
+
+def _user_role(user) -> str:
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    return profile.role
 
 
 def _sequence_context(current: ImageAsset) -> dict:
@@ -22,14 +28,18 @@ def _sequence_context(current: ImageAsset) -> dict:
     next_asset = ImageAsset.objects.filter(sequence_index__gt=current.sequence_index).order_by("sequence_index").first()
     is_complete = total > 0 and completed == total and next_asset is None
     annotated_image_ids = set(Annotation.objects.values_list("image_id", flat=True))
+    draft_image_ids = set(latest_visible_drafts().values_list("image_id", flat=True))
     progress_items = []
     for position, asset in enumerate(ImageAsset.objects.only("id", "sequence_index").order_by("sequence_index"), start=1):
         is_current = asset.sequence_index == current.sequence_index
         is_completed = asset.id in annotated_image_ids
+        is_draft = asset.id in draft_image_ids
         if is_current:
             status = "current"
         elif is_completed:
             status = "completed"
+        elif is_draft:
+            status = "draft"
         else:
             status = "pending"
         progress_items.append(
@@ -39,6 +49,7 @@ def _sequence_context(current: ImageAsset) -> dict:
                 "status": status,
                 "is_current": is_current,
                 "is_completed": is_completed,
+                "is_draft": is_draft,
             }
         )
     return {
@@ -68,9 +79,10 @@ def workspace(request, sequence_index: int | None = None):
 
     image = get_object_or_404(ImageAsset, sequence_index=sequence_index)
     annotation = getattr(image, "annotation", None)
+    visible_box = annotation or latest_visible_draft_for(image)
     context = {
         "image": image,
-        "annotation_json": json.dumps(annotation.as_normalized_dict()) if annotation else "null",
+        "annotation_json": json.dumps(visible_box.as_normalized_dict()) if visible_box else "null",
         "image_url": reverse("image_png", args=[image.pk]),
         "annotation_url": reverse("annotation_detail", args=[image.pk]),
         "export_url": reverse("export_coco"),
@@ -93,16 +105,26 @@ def annotation_detail(request, pk: int):
 
     if request.method == "GET":
         annotation = getattr(image, "annotation", None)
-        return JsonResponse({"annotation": annotation.as_normalized_dict() if annotation else None})
+        visible_box = annotation or latest_visible_draft_for(image)
+        return JsonResponse({"annotation": visible_box.as_normalized_dict() if visible_box else None})
 
     if request.method == "DELETE":
-        Annotation.objects.filter(image=image).delete()
-        return JsonResponse({"annotation": None, "status": "deleted"})
+        deleted, _ = Annotation.objects.filter(image=image).delete()
+        if deleted:
+            return JsonResponse({"annotation": None, "status": "deleted"})
+        draft = latest_visible_draft_for(image)
+        if draft:
+            draft.dismissed_at = timezone.now()
+            draft.dismissed_by = request.user
+            draft.save(update_fields=["dismissed_at", "dismissed_by"])
+            return JsonResponse({"annotation": None, "status": "draft_deleted"})
+        return JsonResponse({"annotation": None, "status": "empty"})
 
     try:
         payload = json.loads(request.body.decode("utf-8"))
         annotation = getattr(image, "annotation", None) or Annotation(image=image)
         annotation.annotator = request.user
+        annotation.role = _user_role(request.user)
         annotation.x = float(payload["x"])
         annotation.y = float(payload["y"])
         annotation.width = float(payload["width"])
@@ -123,6 +145,3 @@ def export_coco(request):
     response = HttpResponse(payload, content_type="application/json")
     response["Content-Disposition"] = f'attachment; filename="nodulate-coco-{stamp}.json"'
     return response
-
-
-

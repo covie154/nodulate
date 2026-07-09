@@ -7,6 +7,7 @@
   const saveState = document.getElementById("save-state");
   const summary = document.getElementById("annotation-summary");
   const deleteButton = document.getElementById("delete-box");
+  const acceptButton = document.getElementById("accept-draft");
   const annotationUrl = stage.dataset.annotationUrl;
   const minSize = 0.02;
   const debounceMs = 500;
@@ -28,6 +29,8 @@
         y: Number(parsed.y),
         width: Number(parsed.width),
         height: Number(parsed.height),
+        source: parsed.source || "human",
+        role: parsed.role || "user",
       };
     } catch (_err) {
       return null;
@@ -79,7 +82,7 @@
     const y = Math.max(0, Math.min(1, raw.y));
     const width = Math.max(minSize, Math.min(1 - x, raw.width));
     const height = Math.max(minSize, Math.min(1 - y, raw.height));
-    return { x, y, width, height };
+    return { x, y, width, height, source: raw.source || (box && box.source) || "human", role: raw.role || (box && box.role) || "user" };
   }
 
   function px(value, axis) {
@@ -87,16 +90,23 @@
     return Math.round(value * (axis === "x" ? r.width : r.height));
   }
 
+  function isDraft() {
+    return !!box && box.source === "draft";
+  }
+
   function render() {
     layer.innerHTML = "";
     hint.classList.toggle("hidden", !!box);
+    if (acceptButton) acceptButton.classList.toggle("hidden", !isDraft());
+    if (deleteButton) deleteButton.disabled = !box;
+
     if (!box) {
       summary.textContent = "No box on this image yet.";
       return;
     }
 
     const el = document.createElement("div");
-    el.className = "annotation-box";
+    el.className = `annotation-box ${isDraft() ? "draft" : "human"}`;
     el.style.left = `${box.x * 100}%`;
     el.style.top = `${box.y * 100}%`;
     el.style.width = `${box.width * 100}%`;
@@ -105,7 +115,39 @@
 
     const caption = document.createElement("div");
     caption.className = "caption";
-    caption.textContent = `lesion · ${px(box.x, "x")},${px(box.y, "y")} ${px(box.width, "x")}×${px(box.height, "y")}`;
+    const label = document.createElement("span");
+    label.textContent = isDraft() ? "draft" : "lesion";
+    caption.appendChild(label);
+
+    if (isDraft()) {
+      const actions = document.createElement("span");
+      actions.className = "caption-actions";
+
+      const acceptDraftButton = document.createElement("button");
+      acceptDraftButton.className = "caption-action accept";
+      acceptDraftButton.type = "button";
+      acceptDraftButton.title = "Accept draft";
+      acceptDraftButton.setAttribute("aria-label", "Accept draft");
+      acceptDraftButton.dataset.captionAction = "accept";
+      acceptDraftButton.innerHTML = "&#10003;";
+      actions.appendChild(acceptDraftButton);
+
+      const deleteDraftButton = document.createElement("button");
+      deleteDraftButton.className = "caption-action danger";
+      deleteDraftButton.type = "button";
+      deleteDraftButton.title = "Delete draft";
+      deleteDraftButton.setAttribute("aria-label", "Delete draft");
+      deleteDraftButton.dataset.captionAction = "delete";
+      deleteDraftButton.innerHTML = "&times;";
+      actions.appendChild(deleteDraftButton);
+
+      caption.appendChild(actions);
+    }
+
+    const coordinates = document.createElement("span");
+    coordinates.className = "caption-coordinates";
+    coordinates.textContent = ` - ${px(box.x, "x")},${px(box.y, "y")} ${px(box.width, "x")}x${px(box.height, "y")}`;
+    caption.appendChild(coordinates);
     el.appendChild(caption);
 
     ["nw", "ne", "sw", "se"].forEach((corner) => {
@@ -116,14 +158,17 @@
     });
 
     layer.appendChild(el);
-    summary.innerHTML = `x${px(box.x, "x")} y${px(box.y, "y")}<br>w${px(box.width, "x")} h${px(box.height, "y")}`;
+    const sourceLabel = isDraft() ? "draft" : box.role || "user";
+    summary.innerHTML = `${sourceLabel}<br>x${px(box.x, "x")} y${px(box.y, "y")}<br>w${px(box.width, "x")} h${px(box.height, "y")}`;
   }
 
   function markDirty() {
+    if (box) box.source = "human";
     dirty = true;
     setSaveState("saving", "Saving...");
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => saveNow(), debounceMs);
+    render();
   }
 
   async function requestSave(payload, attempt) {
@@ -162,10 +207,12 @@
     if (!dirty && !inFlightSave) return true;
     if (inFlightSave) return inFlightSave;
 
-    const payload = box ? { ...box } : null;
+    const payload = box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null;
     inFlightSave = requestSave(payload, 1)
-      .then(() => {
+      .then((result) => {
+        if (result.annotation) box = parseInitial(JSON.stringify(result.annotation));
         dirty = false;
+        render();
         setSaveState("saved", "Saved");
         window.setTimeout(() => {
           if (!dirty) setSaveState("", "");
@@ -187,6 +234,10 @@
 
   stage.addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
+    if (event.target.closest("[data-caption-action]")) {
+      event.preventDefault();
+      return;
+    }
     const handle = event.target.dataset.handle;
     const p = point(event);
     if (handle && box) {
@@ -200,7 +251,7 @@
       return;
     }
     event.preventDefault();
-    box = { x: p.x, y: p.y, width: minSize, height: minSize };
+    box = { x: p.x, y: p.y, width: minSize, height: minSize, source: "human", role: "user" };
     drag = { mode: "create", start: p, original: { ...box } };
     render();
   });
@@ -211,7 +262,7 @@
     if (drag.mode === "create") {
       const x = Math.min(drag.start.x, p.x);
       const y = Math.min(drag.start.y, p.y);
-      box = cleanBox({ x, y, width: Math.abs(p.x - drag.start.x), height: Math.abs(p.y - drag.start.y) });
+      box = cleanBox({ x, y, width: Math.abs(p.x - drag.start.x), height: Math.abs(p.y - drag.start.y), source: "human" });
     } else if (drag.mode === "move") {
       box = cleanBox({
         ...drag.original,
@@ -232,7 +283,7 @@
       top = Math.max(0, top);
       right = Math.min(1, right);
       bottom = Math.min(1, bottom);
-      box = cleanBox({ x: left, y: top, width: right - left, height: bottom - top });
+      box = cleanBox({ x: left, y: top, width: right - left, height: bottom - top, source: original.source, role: original.role });
     }
     render();
   });
@@ -250,7 +301,27 @@
     markDirty();
   }
 
+  function acceptDraft() {
+    if (!isDraft()) return;
+    box.source = "human";
+    dirty = true;
+    setSaveState("saving", "Saving...");
+    saveNow();
+    render();
+  }
+
   deleteButton.addEventListener("click", deleteBox);
+  if (acceptButton) acceptButton.addEventListener("click", acceptDraft);
+
+  layer.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-caption-action]");
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (action.dataset.captionAction === "accept") acceptDraft();
+    if (action.dataset.captionAction === "delete") deleteBox();
+  });
+
   window.addEventListener("keydown", (event) => {
     const tag = document.activeElement && document.activeElement.tagName;
     if (["INPUT", "TEXTAREA"].includes(tag)) return;
