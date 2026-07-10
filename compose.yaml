@@ -1,0 +1,95 @@
+services:
+  web:
+    build:
+      context: .
+    env_file:
+      - ${NODULATE_ENV_FILE:-.env.production}
+    command:
+      - gunicorn
+      - nodulate.wsgi:application
+      - --bind
+      - 0.0.0.0:8000
+      - --workers
+      - "3"
+      - --access-logfile
+      - "-"
+      - --error-logfile
+      - "-"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - sqlite-data:/data
+      - staticfiles:/vol/static
+      - dicom-cache:/vol/dicom-cache
+      - ${NODULATE_LOCAL_DATASET_BIND:-./dataset}:/dataset:ro
+    expose:
+      - "8000"
+    mem_limit: 768m
+    cpus: "1.5"
+    pids_limit: 256
+
+  nginx:
+    image: nginx:1.27.5-alpine
+    env_file:
+      - ${NODULATE_ENV_FILE:-.env.production}
+    environment:
+      NGINX_ENVSUBST_FILTER: '^DOMAIN$'
+    depends_on:
+      - web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/templates:/etc/nginx/templates:ro
+      - staticfiles:/var/www/static:ro
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt:ro
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: "0.5"
+    pids_limit: 128
+
+  certbot:
+    image: certbot/certbot:v2.11.0
+    env_file:
+      - ${NODULATE_ENV_FILE:-.env.production}
+    volumes:
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: "0.25"
+    pids_limit: 128
+
+  certbot-init:
+    image: certbot/certbot:v2.11.0
+    profiles:
+      - init-cert
+    env_file:
+      - ${NODULATE_ENV_FILE:-.env.production}
+    ports:
+      - "80:80"
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+    entrypoint: /bin/sh
+    command: -c "certbot certonly --standalone --non-interactive --agree-tos --no-eff-email --email $${CERTBOT_EMAIL} -d $${DOMAIN}"
+    mem_limit: 128m
+    cpus: "0.25"
+    pids_limit: 128
+
+volumes:
+  sqlite-data:
+  staticfiles:
+  dicom-cache:
+  certbot-www:
+  letsencrypt:

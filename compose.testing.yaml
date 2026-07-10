@@ -1,0 +1,16 @@
+services:
+  web:
+    env_file:
+      - .env.testing
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./dataset:/dataset:ro
+      - sqlite-test-data:/data
+      - static-test-data:/vol/static
+      - dicom-cache-test:/vol/dicom-cache
+
+volumes:
+  sqlite-test-data:
+  static-test-data:
+  dicom-cache-test:

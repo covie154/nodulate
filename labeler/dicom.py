@@ -4,11 +4,15 @@ import hashlib
 import io
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from functools import lru_cache
+from pathlib import Path, PurePosixPath
 
+import boto3
 import numpy as np
 import pydicom
+from botocore.config import Config
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from PIL import Image
 
 from .models import ImageAsset
@@ -41,7 +45,88 @@ def _read_matching_tags(path: Path) -> tuple[str, str]:
     return str(getattr(dataset, "AccessionNumber", "") or ""), str(getattr(dataset, "SOPInstanceUID", "") or "")
 
 
+def _read_matching_tags_from_bytes(payload: bytes) -> tuple[str, str]:
+    try:
+        dataset = pydicom.dcmread(
+            io.BytesIO(payload),
+            stop_before_pixels=True,
+            specific_tags=["AccessionNumber", "SOPInstanceUID"],
+        )
+    except Exception:
+        return "", ""
+    return str(getattr(dataset, "AccessionNumber", "") or ""), str(getattr(dataset, "SOPInstanceUID", "") or "")
+
+
+@lru_cache(maxsize=1)
+def _s3_client():
+    kwargs = {
+        "region_name": settings.AWS_REGION,
+        "config": Config(signature_version="s3v4"),
+    }
+    if settings.AWS_S3_ENDPOINT_URL:
+        kwargs["endpoint_url"] = settings.AWS_S3_ENDPOINT_URL
+    return boto3.client("s3", **kwargs)
+
+
+def _s3_key(relative_path: str) -> str:
+    relative_path = relative_path.lstrip("/")
+    if settings.NODULATE_S3_PREFIX:
+        return f"{settings.NODULATE_S3_PREFIX}/{relative_path}"
+    return relative_path
+
+
+def _relative_s3_key(key: str) -> str:
+    prefix = settings.NODULATE_S3_PREFIX
+    if prefix and key.startswith(f"{prefix}/"):
+        return key[len(prefix) + 1 :]
+    return key
+
+
+def _read_s3_bytes(relative_path: str) -> bytes:
+    response = _s3_client().get_object(Bucket=settings.NODULATE_S3_BUCKET, Key=_s3_key(relative_path))
+    return response["Body"].read()
+
+
+def _read_dicom_bytes(relative_path: str) -> bytes:
+    if settings.NODULATE_STORAGE_BACKEND == "local":
+        return (settings.DATASET_ROOT / relative_path).read_bytes()
+    if settings.NODULATE_STORAGE_BACKEND == "s3":
+        return _read_s3_bytes(relative_path)
+    raise ImproperlyConfigured("Unsupported DICOM storage backend.")
+
+
+def _discover_s3_dataset_files() -> list[DatasetFile]:
+    paginator = _s3_client().get_paginator("list_objects_v2")
+    kwargs = {"Bucket": settings.NODULATE_S3_BUCKET}
+    if settings.NODULATE_S3_PREFIX:
+        kwargs["Prefix"] = f"{settings.NODULATE_S3_PREFIX}/"
+
+    files: list[DatasetFile] = []
+    for page in paginator.paginate(**kwargs):
+        for item in page.get("Contents", []):
+            key = item["Key"]
+            if not key.lower().endswith(".dcm"):
+                continue
+            relative = _relative_s3_key(key)
+            path = PurePosixPath(relative)
+            accession_no, sop_instance_uid = _read_matching_tags_from_bytes(_read_s3_bytes(relative))
+            files.append(
+                DatasetFile(
+                    relative_path=relative,
+                    filename=path.name,
+                    nodule_id=path.parent.name,
+                    sort_key=(_numeric_prefix(path.parent.name), path.name.lower()),
+                    accession_no=accession_no,
+                    sop_instance_uid=sop_instance_uid,
+                )
+            )
+    return sorted(files, key=lambda item: item.sort_key)
+
+
 def discover_dataset_files() -> list[DatasetFile]:
+    if settings.NODULATE_STORAGE_BACKEND == "s3":
+        return _discover_s3_dataset_files()
+
     root = Path(settings.DATASET_ROOT)
     if not root.exists():
         return []
@@ -99,7 +184,14 @@ def ensure_image_dimensions(asset: ImageAsset) -> ImageAsset:
     if asset.width and asset.height:
         return asset
     try:
-        dataset = pydicom.dcmread(str(asset.dicom_path), stop_before_pixels=True, specific_tags=["Rows", "Columns"])
+        if settings.NODULATE_STORAGE_BACKEND == "local":
+            dataset = pydicom.dcmread(str(asset.dicom_path), stop_before_pixels=True, specific_tags=["Rows", "Columns"])
+        else:
+            dataset = pydicom.dcmread(
+                io.BytesIO(_read_dicom_bytes(asset.relative_path)),
+                stop_before_pixels=True,
+                specific_tags=["Rows", "Columns"],
+            )
         asset.width = int(getattr(dataset, "Columns", 0) or 0)
         asset.height = int(getattr(dataset, "Rows", 0) or 0)
         if asset.width and asset.height:
@@ -129,7 +221,10 @@ def dicom_png_bytes(asset: ImageAsset) -> bytes:
     if cache_path.exists():
         return cache_path.read_bytes()
 
-    dataset = pydicom.dcmread(str(asset.dicom_path))
+    if settings.NODULATE_STORAGE_BACKEND == "local":
+        dataset = pydicom.dcmread(str(asset.dicom_path))
+    else:
+        dataset = pydicom.dcmread(io.BytesIO(_read_dicom_bytes(asset.relative_path)))
     pixels = dataset.pixel_array
     if pixels.ndim == 2:
         image = Image.fromarray(_normalize_pixels(pixels), mode="L")

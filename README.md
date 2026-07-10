@@ -67,6 +67,47 @@ python manage.py runserver
 
 Then open the app, log in at `/accounts/login/`, and use the workspace at `/`.
 
+
+## Production Deployment
+
+The production container path uses Gunicorn behind nginx, with certbot managing Let's Encrypt certificates. The Django container runs as UID/GID `10001`, uses three Gunicorn workers, and writes only to mounted volumes for SQLite, collected static files, and the generated DICOM PNG cache.
+
+Create env files from the committed examples:
+
+```bash
+cp .env.testing.example .env.testing
+cp .env.production.example .env.production
+```
+
+Never commit the populated `.env.testing` or `.env.production` files. Put real `DJANGO_SECRET_KEY`, domain, certbot email, and AWS values there. On EC2, prefer an instance role with S3 read access and leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` unset.
+
+For a local container smoke test with local DICOM storage:
+
+```bash
+docker compose --env-file .env.testing -f compose.yaml -f compose.testing.yaml up --build web
+```
+
+For first production certificate issuance on an EC2 host with DNS already pointing at the instance:
+
+```bash
+docker compose --env-file .env.production --profile init-cert run --rm --service-ports certbot-init
+```
+
+Then start the HTTPS stack:
+
+```bash
+docker compose --env-file .env.production up --build -d web nginx certbot
+```
+
+The production env is configured for S3-backed image storage with:
+
+```text
+NODULATE_STORAGE_BACKEND=s3
+NODULATE_S3_BUCKET=your-private-dicom-bucket
+NODULATE_S3_PREFIX=optional/prefix
+```
+
+S3 objects are discovered recursively under the prefix and must keep the same folder/file convention as local testing. The app reads DICOM objects directly from S3 and stores only generated PNG cache files in the `dicom-cache` Docker volume.
 ## Configuration
 
 The app reads these environment variables:

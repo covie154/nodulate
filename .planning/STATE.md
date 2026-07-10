@@ -5,7 +5,7 @@ milestone_name: Draft Model Annotations
 status: planning
 stopped_at: Started V2.0 milestone for offline model draft import and review
 last_updated: "2026-07-09T00:00:00.000Z"
-last_activity: 2026-07-09
+last_activity: 2026-07-10 - Completed quick task 260710-001: Production Gunicorn/nginx deployment
 progress:
   total_phases: 7
   completed_phases: 4
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 Phase: 5 of 7 (Roles & DICOM Matching Foundation)
 Plan: 05-01 pending
 Status: Planning V2.0 implementation
-Last activity: 2026-07-09 - Completed quick task: draft box inline actions
+Last activity: 2026-07-10 - Completed quick task 260710-001: Production Gunicorn/nginx deployment
 
 Progress: [######----] 57%
 
@@ -105,3 +105,4 @@ Resume file: .planning/STATE.md
 | 2026-07-07 | Flat progress segments | Complete |
 | 2026-07-07 | Initial README | Complete |
 | 2026-07-09 | Draft box inline actions | Complete |
+| 2026-07-10 | Production Gunicorn/nginx deployment | Complete |
