@@ -1,10 +1,13 @@
 import io
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 from django.conf import settings
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -316,4 +319,61 @@ class DraftWorkspaceTests(TestCase):
         self.assertIsNotNone(self.draft.dismissed_at)
         self.assertIsNone(latest_visible_draft_for(self.image))
 
+class DeploymentSuperuserCommandTests(TestCase):
+    def test_ensure_superuser_skips_when_env_is_unset(self):
+        with patch.dict(os.environ, {}, clear=True):
+            call_command("ensure_superuser")
 
+        self.assertFalse(User.objects.exists())
+
+    def test_ensure_superuser_creates_superuser_from_env(self):
+        env = {
+            "DJANGO_SUPERUSER_USERNAME": "admin",
+            "DJANGO_SUPERUSER_PASSWORD": "secret12345",
+            "DJANGO_SUPERUSER_EMAIL": "admin@example.com",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            call_command("ensure_superuser")
+
+        user = User.objects.get(username="admin")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.email, "admin@example.com")
+        self.assertTrue(user.check_password("secret12345"))
+
+    def test_ensure_superuser_requires_username_and_password_together(self):
+        with patch.dict(os.environ, {"DJANGO_SUPERUSER_USERNAME": "admin"}, clear=True):
+            with self.assertRaises(CommandError):
+                call_command("ensure_superuser")
+
+    def test_ensure_superuser_does_not_reset_existing_password_by_default(self):
+        user = User.objects.create_user(username="admin", password="original12345")
+        env = {
+            "DJANGO_SUPERUSER_USERNAME": "admin",
+            "DJANGO_SUPERUSER_PASSWORD": "newsecret12345",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            call_command("ensure_superuser")
+
+        user.refresh_from_db()
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.check_password("original12345"))
+        self.assertFalse(user.check_password("newsecret12345"))
+
+    def test_ensure_superuser_can_rotate_existing_password_when_requested(self):
+        user = User.objects.create_user(username="admin", password="original12345")
+        env = {
+            "DJANGO_SUPERUSER_USERNAME": "admin",
+            "DJANGO_SUPERUSER_PASSWORD": "newsecret12345",
+            "DJANGO_SUPERUSER_UPDATE_PASSWORD": "1",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            call_command("ensure_superuser")
+
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("newsecret12345"))

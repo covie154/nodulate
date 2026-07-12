@@ -81,6 +81,8 @@ cp .env.production.example .env.production
 
 Never commit the populated `.env.testing` or `.env.production` files. Put real `DJANGO_SECRET_KEY`, domain, certbot email, and AWS values there. On EC2, prefer an instance role with S3 read access and leave `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` unset.
 
+You can optionally bootstrap the initial Django admin account at container startup by setting both `DJANGO_SUPERUSER_USERNAME` and `DJANGO_SUPERUSER_PASSWORD` in the env file. `DJANGO_SUPERUSER_EMAIL` is optional. Existing users are promoted to staff/superuser if needed, but their password is not reset unless `DJANGO_SUPERUSER_UPDATE_PASSWORD=1` is set.
+
 For a local container smoke test with local DICOM storage:
 
 ```bash
@@ -117,6 +119,10 @@ The app reads these environment variables:
 | `DJANGO_SECRET_KEY` | Development-only fallback | Set this for any shared or deployed environment. |
 | `DJANGO_DEBUG` | `1` | Use `0` outside local development. |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated host allowlist. |
+| `DJANGO_SUPERUSER_USERNAME` | unset | Optional startup admin username; requires `DJANGO_SUPERUSER_PASSWORD`. |
+| `DJANGO_SUPERUSER_PASSWORD` | unset | Optional startup admin password; keep only in uncommitted env files. |
+| `DJANGO_SUPERUSER_EMAIL` | unset | Optional startup admin email. |
+| `DJANGO_SUPERUSER_UPDATE_PASSWORD` | `0` | Set to `1` to rotate an existing startup admin password from env. |
 | `NODULATE_DATASET_ROOT` | `dataset/` | Root folder scanned for `.dcm` files. |
 | `NODULATE_DICOM_CACHE_ROOT` | `media/dicom-cache/` | PNG cache generated from DICOM pixel data. |
 
