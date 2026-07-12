@@ -173,7 +173,6 @@ def ensure_inventory() -> list[ImageAsset]:
 
 
 def first_unlabeled_or_first() -> ImageAsset | None:
-    ensure_inventory()
     unlabeled = ImageAsset.objects.filter(annotation__isnull=True).order_by("sequence_index").first()
     if unlabeled:
         return unlabeled

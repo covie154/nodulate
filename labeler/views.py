@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .dicom import dicom_png_bytes, ensure_inventory, first_unlabeled_or_first, sync_image_assets
+from .dicom import dicom_png_bytes, first_unlabeled_or_first, sync_image_assets
 from .drafts import latest_visible_draft_for, latest_visible_drafts
 from .export import build_coco_export
 from .models import Annotation, ImageAsset, UserProfile
@@ -67,7 +67,6 @@ def _sequence_context(current: ImageAsset) -> dict:
 
 @login_required
 def workspace(request, sequence_index: int | None = None):
-    ensure_inventory()
     if not ImageAsset.objects.exists():
         return render(request, "labeler/empty_dataset.html")
 

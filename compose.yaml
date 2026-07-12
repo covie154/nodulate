@@ -51,6 +51,7 @@ services:
       - staticfiles:/var/www/static:ro
       - certbot-www:/var/www/certbot
       - letsencrypt:/etc/letsencrypt:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     security_opt:
       - no-new-privileges:true
     mem_limit: 128m

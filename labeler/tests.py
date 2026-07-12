@@ -43,6 +43,12 @@ class DatasetInventoryTests(TestCase):
 
         self.assertEqual(first_unlabeled_or_first(), second)
 
+    def test_first_unlabeled_does_not_sync_inventory(self):
+        with patch("labeler.dicom.sync_image_assets") as sync:
+            self.assertIsNone(first_unlabeled_or_first())
+
+        sync.assert_not_called()
+
 
 class WorkspaceTests(TestCase):
     def setUp(self):
@@ -70,6 +76,17 @@ class WorkspaceTests(TestCase):
         self.assertContains(response, "nodulate")
         self.assertContains(response, self.image.filename)
         self.assertContains(response, reverse("image_png", args=[self.image.pk]))
+
+    def test_workspace_empty_dataset_does_not_sync_inventory(self):
+        ImageAsset.objects.all().delete()
+        self.client.force_login(self.user)
+
+        with patch("labeler.views.sync_image_assets") as sync:
+            response = self.client.get(reverse("workspace"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "python manage.py sync_image_assets")
+        sync.assert_not_called()
 
     def test_annotation_save_replaces_existing_box(self):
         self.client.force_login(self.user)
@@ -377,3 +394,19 @@ class DeploymentSuperuserCommandTests(TestCase):
 
         user.refresh_from_db()
         self.assertTrue(user.check_password("newsecret12345"))
+
+
+class SyncImageAssetsCommandTests(TestCase):
+    def test_sync_image_assets_command_reports_synced_count(self):
+        asset = ImageAsset(
+            relative_path="4/4_8.dcm",
+            filename="4_8.dcm",
+            nodule_id="4",
+            sequence_index=1,
+        )
+
+        with patch("labeler.management.commands.sync_image_assets.sync_image_assets", return_value=[asset]):
+            output = io.StringIO()
+            call_command("sync_image_assets", stdout=output)
+
+        self.assertIn("Synced 1 image asset.", output.getvalue())
